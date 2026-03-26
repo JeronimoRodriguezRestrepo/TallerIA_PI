@@ -1,7 +1,11 @@
 from django.shortcuts import render
 from django.http import HttpResponse
+import os
 
 from .models import Movie
+from openai import OpenAI
+from dotenv import load_dotenv
+import numpy as np
 
 import matplotlib.pyplot as plt
 import matplotlib
@@ -123,3 +127,84 @@ def generate_bar_chart(data, xlabel, ylabel):
     buffer.close()
     graphic = base64.b64encode(image_png).decode('utf-8')
     return graphic
+
+
+def recommend_movie(request):
+    search_prompt = request.GET.get('searchPrompt')
+    best_movie = None
+    best_similarity = None
+    error_message = None
+
+    if search_prompt:
+        try:
+            load_dotenv('key2_1.env')
+            api_key = os.environ.get('openai_apikey')
+            if not api_key:
+                raise ValueError('OpenAI API key was not found in key2_1.env')
+
+            client = OpenAI(api_key=api_key)
+            response = client.embeddings.create(
+                input=[search_prompt],
+                model='text-embedding-3-small'
+            )
+            prompt_emb = np.array(response.data[0].embedding, dtype=np.float32)
+
+            max_similarity = -1.0
+            for movie in Movie.objects.all():
+                if not movie.emb:
+                    continue
+
+                movie_emb = decode_embedding(movie.emb)
+                if movie_emb is None or movie_emb.size != prompt_emb.size:
+                    continue
+
+                similarity = cosine_similarity(prompt_emb, movie_emb)
+                if np.isnan(similarity):
+                    continue
+
+                if similarity > max_similarity:
+                    max_similarity = similarity
+                    best_movie = movie
+                    best_similarity = similarity
+
+            if best_movie is None:
+                error_message = 'No se encontro una pelicula con embedding valido para comparar.'
+
+        except Exception as exc:
+            error_message = f'Error al generar recomendacion: {exc}'
+
+    return render(
+        request,
+        'recommendations.html',
+        {
+            'searchPrompt': search_prompt,
+            'best_movie': best_movie,
+            'best_similarity': best_similarity,
+            'error_message': error_message,
+        },
+    )
+
+
+def cosine_similarity(a, b):
+    denominator = np.linalg.norm(a) * np.linalg.norm(b)
+    if denominator == 0:
+        return 0.0
+    return float(np.dot(a, b) / denominator)
+
+
+def decode_embedding(emb_bytes):
+    byte_len = len(emb_bytes)
+
+    if byte_len % 4 == 0:
+        emb32 = np.frombuffer(emb_bytes, dtype=np.float32)
+        if emb32.size == 1536:
+            return emb32
+
+    if byte_len % 8 == 0:
+        emb64 = np.frombuffer(emb_bytes, dtype=np.float64)
+        return emb64.astype(np.float32)
+
+    if byte_len % 4 == 0:
+        return np.frombuffer(emb_bytes, dtype=np.float32)
+
+    return None

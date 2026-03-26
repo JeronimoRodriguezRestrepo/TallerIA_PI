@@ -1,0 +1,42 @@
+{% extends 'base.html' %}
+{% block content %}
+
+<div class="container">
+    <form action="">
+        <div class="mb-3">
+            <label for="searchPrompt" class="form-label">
+                Prompt de recomendacion:
+            </label>
+            <input type="text" class="form-control" name="searchPrompt" placeholder="Pelicula de la segunda guerra mundial"/>
+        </div>
+        <button type="submit" class="btn btn-primary">Recommend</button>
+    </form>
+
+    <p class="mt-3">Prompt: {{ searchPrompt }}</p>
+
+    {% if error_message %}
+    <div class="alert alert-warning" role="alert">
+        {{ error_message }}
+    </div>
+    {% endif %}
+
+    {% if best_movie %}
+    <div class="row row-cols-1 row-cols-md-1 g-4">
+        <div class="col">
+            <div class="card">
+                <img src="{{ best_movie.image.url }}" class="card-img-top" alt="Movie image">
+                <div class="card-body">
+                    <h5 class="card-title fw-bold">{{ best_movie.title }}</h5>
+                    <p class="card-text">{{ best_movie.description }}</p>
+                    <p class="card-text"><strong>Similarity:</strong> {{ best_similarity|floatformat:4 }}</p>
+                    {% if best_movie.url %}
+                        <a href="{{ best_movie.url }}" class="btn btn-primary">Movie Link</a>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+{% endblock content %}
